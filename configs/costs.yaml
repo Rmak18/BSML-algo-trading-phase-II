@@ -1,0 +1,9 @@
+# Transaction cost parameters (aligned with P1 finance assumptions)
+
+commission_per_share: 0.0035       # fixed broker commission per share traded
+spread_factor: 0.5                 # proportion of bid-ask spread paid at execution
+temp_impact_bps: 7                 # temporary market impact in basis points × (participation%)^0.6
+perm_impact_bps: 2                 # permanent market impact in basis points × (participation%)^0.5
+slippage_bps: 1                    # minimum extra execution cost (basis points)
+short_borrow_annual: 0.015         # annualized borrowing cost for short positions
+exchange_fee_bps: 0.5              # exchange and clearing fees (basis points)
