@@ -1,0 +1,7 @@
+seed: 123                  
+policy: baseline           
+output_dir: outputs/runs/latest  
+data:
+  prices_csv: data/toy_prices_baseline.csv  
+
+costs: configs/costs.yaml 
