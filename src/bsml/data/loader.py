@@ -43,3 +43,8 @@ def load_prices(csv_path: str) -> pd.DataFrame:
 
     return df
 
+if __name__ == "__main__":
+    # Manual quick test when run in Codespaces or locally:
+    df = load_prices("data/toy_prices_baseline.csv")
+    print("Rows:", len(df), "| Columns:", list(df.columns))
+    print(df.head(3))
