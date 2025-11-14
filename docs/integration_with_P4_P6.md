@@ -1,6 +1,6 @@
 # Integration with P4 and P6
 
-**Project:** BSML - Randomized Execution Research  
+**Project:** BSML - Randomized Execution Research 
 **Owner:** P7 (Adaptive Adversary Framework)  
 **Date:** November 14, 2025  
 **Status:** Week 1 Deliverable
