@@ -44,6 +44,17 @@ def main():
 
     # 6) Ask P2's baseline policy to generate trades.
     #    Until P2 implements, this will raise NotImplementedError.
+
+    policy_name = cfg.get("policy", "baseline")
+    try:
+        policy = importlib.import_module(f"bsml.policies.{policy_name}")
+    except ModuleNotFoundError as e:
+        (out_dir / "STATUS.txt").write_text(
+            f"Runner preflight complete, but policy module '{policy_name}' was not found.\n"
+            f"Error: {e}\n"
+        )
+        print(f"Policy module '{policy_name}' not found. Runner preflight is complete.")
+        return
     try:
         trades = policy.generate_trades(prices)
     except NotImplementedError as e:
