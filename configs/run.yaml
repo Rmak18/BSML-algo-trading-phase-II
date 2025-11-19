@@ -1,5 +1,5 @@
 seed: 101
-policy: uniform_policy
+policy: ou
 exposure_diff_pct: null
 output_dir: outputs/runs/latest
 data:
