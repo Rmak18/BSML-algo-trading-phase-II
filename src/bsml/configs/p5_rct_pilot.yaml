@@ -1,0 +1,22 @@
+# P5 RCT Pilot config
+input_schema:
+  # map from our expected names -> your CSV columns
+  trade_id: trade_id
+  symbol: symbol
+  timestamp: ts
+  arm: arm
+  side: side
+  ref_price: ref_price
+  exec_price: exec_price
+  qty: qty
+  regime: regime   # optional; if missing, strat by regime is skipped
+options:
+  arm_early: early
+  arm_late: late
+  n_boot: 2000
+  ci: 0.95
+  seed: 17
+  drop_incomplete_pairs: true
+outputs:
+  write_by_symbol: true
+  write_by_regime: true

@@ -1,0 +1,9 @@
+trade_id,symbol,ts,arm,side,ref_price,exec_price,qty,regime
+1,ABC,2025-11-17 10:00,early,buy,100.0,100.2,100,up
+1,ABC,2025-11-17 10:02,late,buy,100.0,100.3,100,up
+2,ABC,2025-11-17 11:00,early,sell,101.0,101.1,50,up
+2,ABC,2025-11-17 11:02,late,sell,101.0,101.0,50,up
+3,XYZ,2025-11-17 10:05,early,buy,50.0,50.1,200,down
+3,XYZ,2025-11-17 10:07,late,buy,50.0,50.15,200,down
+4,XYZ,2025-11-17 12:00,early,sell,51.0,50.9,120,down
+4,XYZ,2025-11-17 12:02,late,sell,51.0,50.85,120,down

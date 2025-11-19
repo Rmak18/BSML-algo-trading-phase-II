@@ -6,3 +6,8 @@ paper/figures/
 paper/tables/
 
 *.ipynb_checkpoints/
+
+__pycache__/
+results/
+*.ipynb_checkpoints
+
