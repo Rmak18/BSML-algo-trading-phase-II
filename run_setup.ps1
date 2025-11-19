@@ -1,23 +1,27 @@
-# --- run_setup.ps1 ---
-# Purpose: Set up environment and run the BSML backtest runner
-# Author: Vincenzo (P3 – Infrastructure)
+# --- run_setup.ps1 (safe version) ---
+# Set PYTHONPATH to ./src, verify import, then run the runner.
 
-# Step 1 – Compute absolute path for src
-$srcPath = (Resolve-Path .\src).Path
+$ErrorActionPreference = "Stop"
+
+# 1) Set PYTHONPATH
+$srcPath = (Resolve-Path ".\src").Path
 $env:PYTHONPATH = $srcPath
-Write-Host "`nPYTHONPATH set to:" -ForegroundColor Cyan
-Write-Host $srcPath -ForegroundColor Yellow
+Write-Host ""
+Write-Host "PYTHONPATH set to: $srcPath"
 
-# Step 2 – Quick import check
-try {
-    python -c "import importlib; m=importlib.import_module('bsml.policies.baseline'); print('✓ Imported:', m.__name__)"
-}
-catch {
-    Write-Host "⚠️  Could not import baseline module. Check that src\bsml\policies\baseline.py exists." -ForegroundColor Red
-    exit
+# 2) Quick import check (baseline module must exist)
+python -c "import importlib,sys,os; sys.path.insert(0, os.path.abspath('src')); importlib.import_module('bsml.policies.baseline'); print('import ok')"
+if ($LASTEXITCODE -ne 0) {
+  Write-Host "Import failed. Check that src\bsml\policies\baseline.py exists." -ForegroundColor Red
+  exit 1
 }
 
-# Step 3 – Run the runner
-Write-Host "`nRunning backtest..." -ForegroundColor Cyan
+# 3) Run the runner
+Write-Host ""
+Write-Host "Running backtest..."
 python -m bsml.core.runner
-Write-Host "`nFinished at $(Get-Date -Format 'HH:mm:ss')" -ForegroundColor Green
+
+# 4) End
+Write-Host ""
+Write-Host ("Finished at {0}" -f (Get-Date -Format "HH:mm:ss"))
+
