@@ -1,153 +1,158 @@
-from __future__ import annotations
-
-from pathlib import Path
-from typing import Dict, Any, Iterable
-
-import yaml
+# cost/models.py - Transaction cost model
 import pandas as pd
+import numpy as np
+from typing import Dict
+import yaml
 
 
-# ---------------------------
-# Public API (P3 ownership)
-# ---------------------------
+def load_cost_config(path: str) -> Dict:
+    """Load cost configuration from YAML."""
+    with open(path, 'r') as f:
+        return yaml.safe_load(f)
 
-def load_cost_config(path: str) -> Dict[str, Any]:
+
+def apply_costs(
+    trades: pd.DataFrame,
+    cost_config: Dict,
+    prices: pd.DataFrame = None
+) -> pd.DataFrame:
     """
-    Load transaction-cost parameters from a YAML file.
-
-    Parameters
-    ----------
-    path : str
-        File-system path to the YAML file (e.g., 'configs/costs.yaml').
-
-    Returns
-    -------
-    Dict[str, Any]
-        A dictionary with the cost parameters that downstream code can read.
-
-    Raises
-    ------
-    FileNotFoundError
-        If the YAML file does not exist.
-    ValueError
-        If required keys are missing or malformed.
-
-    Notes
-    -----
-    - This function does *not* interpret finance formulas. It only loads and
-      validates presence of a minimal set of keys so the pipeline is robust.
+    Apply realistic transaction costs to trades.
+    
+    Cost components:
+    1. Commission (per share)
+    2. Exchange fees (bps of notional)
+    3. Spread cost (bid-ask spread)
+    4. Temporary market impact
+    5. Permanent market impact
+    6. Short borrow costs (for short positions)
+    7. Slippage
+    
+    Args:
+        trades: DataFrame with [date, symbol, side, qty, price]
+        cost_config: Dictionary with cost parameters
+        prices: Optional price data for spread estimation
+        
+    Returns:
+        DataFrame with added columns: [total_cost, cost_bps, net_price]
     """
-    p = Path(path)
-    if not p.exists():
-        raise FileNotFoundError(f"Cost config not found: {p}")
-
-    try:
-        cfg = yaml.safe_load(p.read_text())
-    except yaml.YAMLError as e:
-        raise ValueError(f"Invalid YAML in cost config: {p}") from e
-
-    _validate_cost_keys(cfg, required_keys=(
-        "commission_per_share",
-        "spread_factor",
-        "temp_impact_bps",
-        "perm_impact_bps",
-        "slippage_bps",
-        "short_borrow_annual",
-        "exchange_fee_bps",
-    ))
-    return cfg
-
-
-def apply_costs(trades: pd.DataFrame, costs_cfg: Dict[str, Any]) -> pd.DataFrame:
-    """
-    Attach execution-related columns to a trades table (placeholder wiring).
-
-    This is an *interface* that standardizes outputs for downstream roles (P1/P2/P5).
-    It does NOT implement finance formulas; values are placeholders so the schema is
-    stable and the runner can proceed.
-
-    Expected input schema (rows = trade slices)
-    -------------------------------------------
-    trades columns REQUIRED:
-        - 'date'       : trading timestamp or day (any datetime-like)
-        - 'symbol'     : instrument identifier (string)
-        - 'side'       : literal 'BUY' or 'SELL' (string, upper case)
-        - 'qty'        : strictly positive number of shares (float or int)
-        - 'ref_price'  : reference/ideal price used for ΔIS (float)
-
-    Output columns added (standardized contract)
-    --------------------------------------------
-        - 'exec_price' : realized execution price (float, placeholder = ref_price)
-        - 'cost_bps'   : total costs in basis points (float, placeholder = 0.0)
-        - 'cost_value' : monetary cost per row (float, placeholder = 0.0)
-
-    Parameters
-    ----------
-    trades : pd.DataFrame
-        Table of intended trades as produced by the policy (P2).
-    costs_cfg : Dict[str, Any]
-        Cost parameters as loaded by `load_cost_config`. They are *not* used here,
-        but are accepted to lock the function signature for future updates.
-
-    Returns
-    -------
-    pd.DataFrame
-        A copy of `trades` with the three standardized columns appended.
-
-    Raises
-    ------
-    ValueError
-        If required input columns are missing.
-    """
-    _require_columns(trades, required=(
-        "date", "symbol", "side", "qty", "ref_price"
-    ))
-
-    out = trades.copy()
-
-    # Placeholder execution price = reference price.
-    # This keeps downstream metrics derivations simple until formulas are added.
-    out["exec_price"] = out["ref_price"].astype(float)
-
-    # Placeholders for costs:
-    # - cost_bps   : total cost expressed in basis points (1 bp = 0.01%)
-    # - cost_value : absolute currency amount of the cost for that trade row
-    out["cost_bps"] = 0.0
-    out["cost_value"] = 0.0
-
-    # Optional sanity: normalize 'side' to upper-case to avoid downstream surprises.
-    if "side" in out.columns:
-        out["side"] = out["side"].astype(str).str.upper()
-
-    # Quantities should be positive by contract; enforce numeric dtype.
-    out["qty"] = pd.to_numeric(out["qty"], errors="raise")
-
-    return out
-
-
-# ---------------------------
-# Internal helpers (P3)
-# ---------------------------
-
-def _validate_cost_keys(cfg: Dict[str, Any], required_keys: Iterable[str]) -> None:
-    """Ensure required YAML keys are present; raise clear errors if not."""
-    missing = [k for k in required_keys if k not in cfg]
-    if missing:
-        raise ValueError(
-            "Missing keys in cost config: "
-            + ", ".join(missing)
-            + ". Please update 'configs/costs.yaml'."
+    trades = trades.copy()
+    
+    # Extract cost parameters
+    commission_per_share = cost_config.get('commission_per_share', 0.0035)
+    exchange_fee_bps = cost_config.get('exchange_fee_bps', 0.5)
+    spread_factor = cost_config.get('spread_factor', 0.5)
+    temp_impact_bps = cost_config.get('temp_impact_bps', 7)
+    perm_impact_bps = cost_config.get('perm_impact_bps', 2)
+    slippage_bps = cost_config.get('slippage_bps', 1)
+    short_borrow_annual = cost_config.get('short_borrow_annual', 0.015)
+    
+    # Calculate notional value
+    trades['notional'] = trades['qty'] * trades['price']
+    
+    # 1. Commission
+    trades['cost_commission'] = trades['qty'] * commission_per_share
+    
+    # 2. Exchange fees
+    trades['cost_exchange'] = trades['notional'] * (exchange_fee_bps / 10000)
+    
+    # 3. Spread cost (half-spread crossing)
+    # Estimate spread as % of price (use bid-ask data if available)
+    if prices is not None and 'spread_bps' in prices.columns:
+        # Merge actual spreads
+        trades = trades.merge(
+            prices[['date', 'symbol', 'spread_bps']], 
+            on=['date', 'symbol'],
+            how='left'
         )
+        trades['spread_bps'] = trades['spread_bps'].fillna(10)  # Default 10bps
+    else:
+        # Estimate spread based on volatility proxy
+        trades['spread_bps'] = 10  # Conservative estimate
+    
+    trades['cost_spread'] = trades['notional'] * (
+        trades['spread_bps'] * spread_factor / 10000
+    )
+    
+    # 4. Temporary market impact (square root model)
+    # Impact proportional to sqrt(trade_size / ADV)
+    # Simplified: use fixed impact in bps
+    trades['cost_temp_impact'] = trades['notional'] * (temp_impact_bps / 10000)
+    
+    # 5. Permanent market impact
+    trades['cost_perm_impact'] = trades['notional'] * (perm_impact_bps / 10000)
+    
+    # 6. Slippage (additional adverse selection)
+    trades['cost_slippage'] = trades['notional'] * (slippage_bps / 10000)
+    
+    # 7. Short borrow costs (for shorts, annualized rate prorated)
+    trades['is_short'] = trades['side'].str.upper().isin(['SELL', 'SHORT'])
+    trades['holding_days'] = 1  # Assume 1-day holding for simplicity
+    trades['cost_borrow'] = np.where(
+        trades['is_short'],
+        trades['notional'] * short_borrow_annual * (trades['holding_days'] / 365),
+        0
+    )
+    
+    # Total cost
+    cost_columns = [
+        'cost_commission', 'cost_exchange', 'cost_spread',
+        'cost_temp_impact', 'cost_perm_impact', 
+        'cost_slippage', 'cost_borrow'
+    ]
+    trades['total_cost'] = trades[cost_columns].sum(axis=1)
+    
+    # Cost in basis points
+    trades['cost_bps'] = (trades['total_cost'] / trades['notional']) * 10000
+    
+    # Net execution price (after costs)
+    trades['net_price'] = np.where(
+        trades['side'].str.upper() == 'BUY',
+        trades['price'] + (trades['total_cost'] / trades['qty']),
+        trades['price'] - (trades['total_cost'] / trades['qty'])
+    )
+    
+    # Clean up temporary columns
+    trades = trades.drop(['is_short', 'holding_days'], axis=1, errors='ignore')
+    
+    return trades
 
 
-def _require_columns(df: pd.DataFrame, required: Iterable[str]) -> None:
-    """Ensure required DataFrame columns are present; raise clear errors if not."""
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(
-            "Trades table is missing required columns: "
-            + ", ".join(missing)
-            + ". Expected at least: "
-            + ", ".join(required)
-        )
-
+def compute_implementation_shortfall(
+    trades: pd.DataFrame,
+    benchmark_price: str = 'arrival_price'
+) -> pd.DataFrame:
+    """
+    Compute implementation shortfall for trades.
+    
+    IS = (Execution Price - Benchmark Price) / Benchmark Price
+    
+    For buys: positive IS = paid more than benchmark (bad)
+    For sells: positive IS = received less than benchmark (bad)
+    
+    Args:
+        trades: DataFrame with execution data
+        benchmark_price: Column name for benchmark ('arrival_price', 'ref_price', etc.)
+        
+    Returns:
+        DataFrame with added 'impl_shortfall_bps' column
+    """
+    trades = trades.copy()
+    
+    if benchmark_price not in trades.columns:
+        # Use ref_price as fallback
+        benchmark_price = 'ref_price'
+    
+    # Calculate shortfall
+    trades['impl_shortfall'] = np.where(
+        trades['side'].str.upper() == 'BUY',
+        trades['net_price'] - trades[benchmark_price],
+        trades[benchmark_price] - trades['net_price']
+    )
+    
+    # Convert to basis points
+    trades['impl_shortfall_bps'] = (
+        trades['impl_shortfall'] / trades[benchmark_price]
+    ) * 10000
+    
+    return trades
