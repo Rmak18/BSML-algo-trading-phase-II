@@ -1,0 +1,5 @@
+Strategy,Sharpe,Ret (%),Vol (%),MaxDD (%),IS (bps),AUC
+Baseline (Deterministic TSMOM),0.94,15.8,16.8,-18.3,0.0,0.78
+Uniform Randomization,1.04,16.2,15.6,-15.7,-11.2,0.62
+OU Process (Best),1.12,17.1,15.3,-14.2,-14.8,0.57
+Pink Noise,0.98,15.9,16.2,-16.4,-8.5,0.65

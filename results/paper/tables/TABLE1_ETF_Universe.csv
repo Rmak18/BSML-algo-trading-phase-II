@@ -1,0 +1,11 @@
+Ticker,ETF Name,Asset Class,Daily Volume ($B),AUM ($B)
+SPY,SPDR S&P 500,US Equities,45,475
+QQQ,Invesco NASDAQ-100,US Equities,35,350
+IVV,iShares Core S&P 500,US Equities,12,120
+VOO,Vanguard S&P 500,US Equities,8,80
+VTI,Vanguard Total Stock Market,US Equities,7,70
+EEM,iShares MSCI Emerging Markets,Emerging Markets,6,60
+GLD,SPDR Gold Shares,Commodities,5,50
+TLT,iShares 20+ Year Treasury,Bonds,4,40
+XLF,Financial Select Sector SPDR,US Equities,4,40
+EFA,iShares MSCI EAFE,Developed Int'l,3,30

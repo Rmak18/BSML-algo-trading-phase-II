@@ -1,0 +1,5 @@
+Policy,Early (bps),Late (bps),Diff (bps),p-value
+Baseline,-8.2,-8.4,-0.2,0.89
+Uniform,-13.5,-9.8,3.7,0.04
+OU Process,-16.2,-13.4,2.8,0.08
+Pink Noise,-11.1,-6.9,4.2,0.02

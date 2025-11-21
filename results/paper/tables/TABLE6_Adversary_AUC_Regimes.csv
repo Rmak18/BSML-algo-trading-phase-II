@@ -1,0 +1,5 @@
+Policy,Low Vol,Med Vol,High Vol,Crisis,Avg
+Baseline,0.72,0.78,0.83,0.88,0.78
+Uniform,0.58,0.62,0.66,0.7,0.62
+OU Process,0.53,0.57,0.61,0.66,0.57
+Pink Noise,0.61,0.65,0.69,0.73,0.65

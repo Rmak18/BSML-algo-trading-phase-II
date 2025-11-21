@@ -1,0 +1,5 @@
+Metric,Mean,StdDev,CI95_Low,CI95_High
+Sharpe (OU),1.12,0.08,1.1,1.14
+Sharpe (Baseline),0.94,0.06,0.92,0.96
+IS OU (bps),-14.8,3.2,-15.7,-13.9
+AUC (OU),0.57,0.04,0.56,0.58

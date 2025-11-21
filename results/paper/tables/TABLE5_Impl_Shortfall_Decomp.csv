@@ -1,0 +1,6 @@
+Component,Baseline (bps),OU (bps),Improvement (bps)
+Bid-Ask Spread,6.2,6.2,0.0
+Market Impact,3.8,3.2,0.6
+Adverse Selection,12.5,-1.9,14.4
+Timing Cost,-5.3,-6.4,-1.1
+TOTAL,17.2,1.1,16.1
