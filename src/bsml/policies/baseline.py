@@ -1,10 +1,9 @@
 import pandas as pd
 
+
 def generate_trades(prices: pd.DataFrame) -> pd.DataFrame:
     """
-    Deterministic baseline schedule:
-    - Take the price history for one symbol.
-    - Execute a fixed total quantity evenly over all timestamps.
+    Deterministic baseline schedule.
 
     Input `prices` schema (from load_prices):
         - 'date'
@@ -16,10 +15,13 @@ def generate_trades(prices: pd.DataFrame) -> pd.DataFrame:
         - 'symbol'
         - 'side'
         - 'qty'
-        - 'ref_price'
+        - 'price'      (used by cost model)
+        - 'ref_price'  (policy-specific reference price)
     """
     if prices is None or len(prices) == 0:
-        return pd.DataFrame(columns=["date", "symbol", "side", "qty", "ref_price"])
+        return pd.DataFrame(
+            columns=["date", "symbol", "side", "qty", "price", "ref_price"]
+        )
 
     required = {"date", "symbol", "price"}
     missing = required - set(prices.columns)
@@ -31,16 +33,17 @@ def generate_trades(prices: pd.DataFrame) -> pd.DataFrame:
 
     # simple equal-slice execution over the whole horizon
     n = len(df)
-    total_qty = 100_000.0   # arbitrary total quantity
+    total_qty = 100_000.0  # arbitrary total quantity
     slice_qty = total_qty / n
 
     trades = pd.DataFrame(
         {
             "date": df["date"],
             "symbol": df["symbol"],
-            "side": "BUY",                          # baseline = buy schedule
+            "side": "BUY",                               # baseline = buy schedule
             "qty": slice_qty,
-            "ref_price": df["price"].astype(float), # used by cost model
+            "price": df["price"].astype(float),          # used by cost model
+            "ref_price": df["price"].astype(float),      # can be perturbed by policies
         }
     )
 

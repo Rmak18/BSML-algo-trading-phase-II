@@ -39,7 +39,8 @@ def main():
     snapshot(out_dir)
 
     # 4) Load input prices (schema: date, symbol, price)
-    prices = load_prices(cfg["data"]["prices_csv"])
+    prices_path = Path("data/etf_1y/backtest_ready/ALL_backtest.csv")
+    prices = load_prices(prices_path)
 
     # 5) Load cost parameters from YAML
     costs_cfg = load_cost_config(cfg["costs"])
