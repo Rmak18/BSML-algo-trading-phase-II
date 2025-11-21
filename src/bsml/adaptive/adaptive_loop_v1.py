@@ -468,7 +468,7 @@ def adaptive_training_loop(
                 if hold_count >= config.CONVERGENCE_PATIENCE:
                     converged = True
                     if verbose:
-                        print(f"\n🎉 CONVERGED after {iter_num} iterations!")
+                        print(f"\n CONVERGED after {iter_num} iterations!")
                     break
             else:
                 hold_count = 0
@@ -554,7 +554,7 @@ def main():
         print(f"  ✓ Using prediction window: {prediction_window:.1f} minutes ({prediction_window/60:.2f} hours)")
         
     except Exception as e:
-        print(f"  ⚠️ Auto-detection failed: {e}")
+        print(f"  Auto-detection failed: {e}")
         prediction_window = 720.0  # Default: 12 hours
         gap_stats = None
         print(f"  Using default: {prediction_window} minutes")
@@ -590,9 +590,9 @@ def main():
     # Final summary
     print("\n" + "="*80)
     if results['converged']:
-        print("✅ WEEK 3 PILOT COMPLETE - CONVERGED")
+        print(" WEEK 3 PILOT COMPLETE - CONVERGED")
     else:
-        print("✅ WEEK 3 PILOT COMPLETE - MAX ITERATIONS REACHED")
+        print(" WEEK 3 PILOT COMPLETE - MAX ITERATIONS REACHED")
     print("="*80)
     print(f"Finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     
@@ -603,12 +603,12 @@ def main():
         print(f"Prediction window: {prediction_window:.1f} minutes ({prediction_window/60:.2f} hours)")
         
         if final_auc > 0.75:
-            print("\n⚠️  HIGH PREDICTABILITY")
+            print("\n  HIGH PREDICTABILITY")
             print(f"   → Adversary predicts trades with {final_auc*100:.1f}% accuracy")
             print(f"   → Need more aggressive randomization")
             print(f"   → Consider OU or Pink noise policies")
         elif final_auc < 0.55:
-            print("\n⚠️  TOO RANDOM")
+            print("\n  TOO RANDOM")
             print(f"   → Strategy may be too noisy")
             print(f"   → Consider reducing randomization")
         else:
