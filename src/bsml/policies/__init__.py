@@ -1,4 +1,3 @@
-
 """
 Randomization policies for BSML project.
 
@@ -8,6 +7,8 @@ This module provides:
 - Utility functions for seed generation and exposure checks
 
 Owner: P4
+Week 2: Uniform policy
+Week 3: OU and Pink policies
 """
 
 # Base class
@@ -20,6 +21,20 @@ from .uniform_policy import (
     CONSERVATIVE_UNIFORM_PARAMS,
     AGGRESSIVE_UNIFORM_PARAMS,
     NOCLAMPING_UNIFORM_PARAMS
+)
+
+from .ou_policy import (
+    OUPolicy,
+    DEFAULT_OU_PARAMS,
+    FAST_REVERSION_OU_PARAMS,
+    SLOW_REVERSION_OU_PARAMS,
+)
+
+from .pink_policy import (
+    PinkNoisePolicy,
+    DEFAULT_PINK_PARAMS,
+    WHITE_NOISE_PARAMS,
+    BROWN_NOISE_PARAMS,
 )
 
 # Utility functions
@@ -39,12 +54,24 @@ __all__ = [
     
     # Concrete policies
     'UniformPolicy',
+    'OUPolicy',
+    'PinkNoisePolicy',
     
-    # Predefined parameter sets
+    # Uniform predefined parameter sets
     'DEFAULT_UNIFORM_PARAMS',
     'CONSERVATIVE_UNIFORM_PARAMS',
     'AGGRESSIVE_UNIFORM_PARAMS',
     'NOCLAMPING_UNIFORM_PARAMS',
+    
+    # OU predefined parameter sets
+    'DEFAULT_OU_PARAMS',
+    'FAST_REVERSION_OU_PARAMS',
+    'SLOW_REVERSION_OU_PARAMS',
+    
+    # Pink predefined parameter sets
+    'DEFAULT_PINK_PARAMS',
+    'WHITE_NOISE_PARAMS',
+    'BROWN_NOISE_PARAMS',
     
     # Utility functions
     'generate_policy_seed',
@@ -56,5 +83,5 @@ __all__ = [
     'validate_parameter_bounds',
 ]
 
-__version__ = '0.1.0'
+__version__ = '0.2.0'  # Updated for Week 3
 __author__ = 'P4'

@@ -1,0 +1,28 @@
+# Week 3 - OU Policy Configuration Example
+# Usage: Use this for running backtests with OU randomization
+
+randomization:
+  policy: "OU"
+  seed: 42
+  
+  params:
+    # Mean reversion parameters
+    theta_timing: 0.5          # Half-life ≈ 1.4 hours
+    theta_threshold: 0.5
+    
+    # Volatility parameters (adjustable by P7)
+    sigma_timing: 1.0          # Hours
+    sigma_threshold: 0.05      # Fractional
+    
+    # Long-term mean
+    mu: 0.0                    # Centered at zero
+    
+    # State monitoring
+    state_reset_threshold: 10.0
+    
+    # Time tracking
+    track_elapsed_time: true   # Use actual elapsed time
+    dt_fixed: 1.0              # Fallback if not tracking
+    
+    # Market hours
+    respect_market_hours: true

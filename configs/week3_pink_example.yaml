@@ -1,0 +1,20 @@
+# Week 3 - Pink Noise Policy Configuration Example
+# Usage: Use this for running backtests with Pink noise randomization
+
+randomization:
+  policy: "Pink"
+  seed: 42
+  
+  params:
+    # Spectral properties
+    alpha: 1.0                 # 1.0 = pink noise (1/f)
+    
+    # Scale parameters (adjustable by P7)
+    scale_timing: 1.5          # Hours std dev
+    scale_threshold: 0.075     # Fractional std dev
+    
+    # Buffer management
+    buffer_size: 10000         # Pre-generate 10K samples
+    
+    # Market hours
+    respect_market_hours: true
