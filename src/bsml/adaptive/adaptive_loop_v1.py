@@ -26,23 +26,16 @@ def adaptive_training_loop(prices_df, max_iter=5):
     
     for i in range(max_iter):
         print(f"\nITER {i+1}: params={params}")
-        
-        # Generate trades
         trades = policy.generate_trades(prices_df)
         enriched = enrich_trades_for_adversary(trades, prices_df)
-        
-        # Split data
         train, val, test = time_split_trades(enriched)
         
         if len(val) < 50:
             print("Not enough validation data")
             break
         
-        # Train adversary
         adversary = P7AdaptiveAdversary(window_size=5)
         adversary.train(train)
-        
-        # Evaluate on validation set
         auc = adversary.evaluate(val)
         
         print(f"AUC: {auc:.4f}")
@@ -58,7 +51,7 @@ def adaptive_training_loop(prices_df, max_iter=5):
     return results
 
 def main():
-    print("P7 WEEK 3 PILOT: P7 Adaptive Adversary")
+    print("P7 WEEK 3 PILOT")
     prices = load_prices("data/ALL_backtest.csv")
     print(f"Loaded {len(prices)} rows")
     results = adaptive_training_loop(prices, max_iter=5)
