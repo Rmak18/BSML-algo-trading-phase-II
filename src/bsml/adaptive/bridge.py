@@ -221,29 +221,3 @@ def get_enrichment_stats(enriched_df: pd.DataFrame) -> dict:
         },
         'columns': enriched_df.columns.tolist()
     }
-```
-
----
-
-## **📋 SUMMARY OF CHANGES:**
-
-### **`__init__.py`:**
-✅ **No changes needed** - keep as is
-
-### **`bridge.py`:**
-✅ **Added validation** (`validate_trades()`)
-✅ **Modular pipeline** (separate functions for each step)
-✅ **Better error handling** (raises clear errors)
-✅ **Timestamp robustness** (handles multiple formats)
-✅ **Added `get_enrichment_stats()`** for debugging
-✅ **Better documentation** (explains each step)
-
----
-
-## **🚀 FINAL FILE STRUCTURE:**
-```
-src/bsml/adaptive/
-├── __init__.py              ← Keep as is ✅
-├── bridge.py                ← Use updated version above ✅
-├── adversary_classifier.py  ← Use updated version from previous message ✅
-└── adaptive_loop_v1.py      ← Use updated version with auto-detection ✅
