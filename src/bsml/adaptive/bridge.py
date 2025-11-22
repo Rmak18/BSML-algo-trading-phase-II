@@ -1,14 +1,7 @@
 """
-Bridge: P4 Policy Output → P7 Adversary Input
+Bridge: P4 Policy Output -> P7 Adversary Input
 
-Converts P4's trade format to enriched format for adversary training.
-
-Key transformations:
-- Standardize column names (date → timestamp)
-- Add metadata (policy_id, exec_flag)
-- Ensure datetime types
-- Add derived features (PnL approximation)
-- Clean and validate data
+Converts trade data to daily signal format for P6-style adversarial task.
 
 Owner: P7
 Week: 3
@@ -16,208 +9,147 @@ Week: 3
 
 import pandas as pd
 import numpy as np
-from typing import Optional
-import warnings
 
 
-def validate_trades(trades_df: pd.DataFrame) -> tuple:
+def trades_to_daily_signals(trades_df: pd.DataFrame, prices_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Validate trade data before enrichment.
+    Convert P4 trades to daily signal format (P6-style).
     
-    Returns:
-        (is_valid, error_message)
-    """
-    required_cols = ['symbol']
-    
-    # Check required columns
-    missing = [c for c in required_cols if c not in trades_df.columns]
-    if missing:
-        return False, f"Missing required columns: {missing}"
-    
-    # Check for empty
-    if len(trades_df) == 0:
-        return False, "Empty trades DataFrame"
-    
-    # Check for valid symbols
-    if trades_df['symbol'].isna().any():
-        return False, "NaN values in symbol column"
-    
-    return True, "OK"
-
-
-def standardize_timestamp(trades_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Ensure timestamp column exists and is properly formatted.
-    
-    Handles multiple input formats:
-    - 'date' column → rename to 'timestamp'
-    - 'timestamp' column → ensure datetime type
-    """
-    df = trades_df.copy()
-    
-    # Rename date → timestamp
-    if 'date' in df.columns and 'timestamp' not in df.columns:
-        df.rename(columns={'date': 'timestamp'}, inplace=True)
-    
-    # Ensure datetime type
-    if 'timestamp' in df.columns:
-        if not pd.api.types.is_datetime64_any_dtype(df['timestamp']):
-            try:
-                df['timestamp'] = pd.to_datetime(df['timestamp'])
-            except Exception as e:
-                warnings.warn(f"Could not convert timestamp to datetime: {e}")
-    else:
-        raise ValueError("No date/timestamp column found in trades!")
-    
-    return df
-
-
-def add_metadata(trades_df: pd.DataFrame, policy_id: str) -> pd.DataFrame:
-    """
-    Add metadata columns required by adversary.
-    
-    Metadata:
-    - policy_id: Identifies which policy generated these trades
-    - exec_flag: All rows are executions (=1)
-    """
-    df = trades_df.copy()
-    
-    df['policy_id'] = policy_id
-    df['exec_flag'] = 1  # All rows in P4 output are executions
-    
-    return df
-
-
-def add_price_fields(trades_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Ensure mid_price exists for adversary feature engineering.
-    
-    Priority:
-    1. Use 'mid_price' if exists
-    2. Use 'price' as fallback
-    3. Use 'ref_price' as last resort
-    """
-    df = trades_df.copy()
-    
-    if 'mid_price' not in df.columns:
-        if 'price' in df.columns:
-            df['mid_price'] = df['price']
-        elif 'ref_price' in df.columns:
-            df['mid_price'] = df['ref_price']
-        else:
-            raise ValueError("No price column found (mid_price, price, or ref_price)")
-    
-    return df
-
-
-def add_derived_features(trades_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Add derived features that might be useful for adversary.
-    
-    Features:
-    - volume: Default if missing
-    - pnl: Approximate PnL (if ref_price exists)
-    """
-    df = trades_df.copy()
-    
-    # Default volume
-    if 'volume' not in df.columns:
-        df['volume'] = 1000.0
-    
-    # Approximate PnL (useful for future extensions)
-    if 'pnl' not in df.columns and 'ref_price' in df.columns:
-        if 'side' in df.columns and 'qty' in df.columns:
-            df['pnl'] = np.where(
-                df['side'].str.upper() == 'BUY',
-                -(df['mid_price'] - df['ref_price']) * df['qty'].abs(),
-                (df['mid_price'] - df['ref_price']) * df['qty'].abs()
-            )
-    
-    return df
-
-
-def clean_and_sort(trades_df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Final cleaning and sorting.
-    
-    Steps:
-    1. Drop rows with missing critical fields
-    2. Sort by symbol and timestamp
-    3. Reset index
-    """
-    df = trades_df.copy()
-    
-    # Drop rows with missing critical fields
-    critical_cols = ['timestamp', 'symbol', 'mid_price']
-    df = df.dropna(subset=critical_cols)
-    
-    # Sort
-    df = df.sort_values(['symbol', 'timestamp']).reset_index(drop=True)
-    
-    return df
-
-
-def enrich_trades_for_adversary(
-    trades_df: pd.DataFrame,
-    prices_df: pd.DataFrame,
-    policy_id: str = 'uniform'
-) -> pd.DataFrame:
-    """
-    Main enrichment pipeline: P4 trades → P7 adversary input.
-    
-    Pipeline:
-    1. Validate input
-    2. Standardize timestamp
-    3. Add metadata
-    4. Add price fields
-    5. Add derived features
-    6. Clean and sort
+    For each date and symbol:
+    - signal = 1 if trade occurred
+    - signal = 0 if no trade occurred
     
     Args:
-        trades_df: Raw trades from P4 policy
-        prices_df: Original price data (for reference, currently unused)
-        policy_id: Policy identifier
+        trades_df: Trade records with columns [date/timestamp, symbol, side, qty, price]
+        prices_df: Full price history (daily)
     
     Returns:
-        Enriched DataFrame ready for adversary training
-    
-    Raises:
-        ValueError: If validation fails
+        DataFrame with columns [date, symbol, signal]
     """
-    # Validate
-    is_valid, error_msg = validate_trades(trades_df)
-    if not is_valid:
-        raise ValueError(f"Trade validation failed: {error_msg}")
+    # Ensure datetime
+    if 'date' in trades_df.columns:
+        trades_df = trades_df.copy()
+        trades_df['date'] = pd.to_datetime(trades_df['date'])
+    elif 'timestamp' in trades_df.columns:
+        trades_df = trades_df.copy()
+        trades_df['date'] = pd.to_datetime(trades_df['timestamp']).dt.date
+        trades_df['date'] = pd.to_datetime(trades_df['date'])
     
-    # Pipeline
-    enriched = trades_df.copy()
-    enriched = standardize_timestamp(enriched)
-    enriched = add_metadata(enriched, policy_id)
-    enriched = add_price_fields(enriched)
-    enriched = add_derived_features(enriched)
-    enriched = clean_and_sort(enriched)
+    # Mark days with trades
+    trades_df['signal'] = 1
+    trade_signals = trades_df.groupby(['date', 'symbol'])['signal'].max().reset_index()
     
-    # Final validation
-    if len(enriched) == 0:
-        raise ValueError("Enrichment resulted in empty DataFrame!")
+    # Create full date x symbol grid from prices
+    price_dates = pd.to_datetime(prices_df['date']).unique()
+    symbols = trades_df['symbol'].unique()
     
-    return enriched
+    full_grid = pd.MultiIndex.from_product(
+        [price_dates, symbols],
+        names=['date', 'symbol']
+    ).to_frame(index=False)
+    
+    # Merge to get signals (0 where no trade)
+    signals_df = full_grid.merge(trade_signals, on=['date', 'symbol'], how='left')
+    signals_df['signal'] = signals_df['signal'].fillna(0).astype(int)
+    
+    return signals_df
 
 
-def get_enrichment_stats(enriched_df: pd.DataFrame) -> dict:
+def enrich_with_price_features(signals_df: pd.DataFrame, prices_df: pd.DataFrame) -> pd.DataFrame:
     """
-    Get statistics about enriched trades (for debugging).
+    Add price-based features for adversary (P6-style).
+    
+    Features:
+    - Price momentum (5, 10, 20 day)
+    - Volatility (10, 30, 60 day)
+    - Price levels
+    
+    Args:
+        signals_df: Daily signals [date, symbol, signal]
+        prices_df: Price history
     
     Returns:
-        Dict with counts, date ranges, symbols
+        Enriched DataFrame with features
     """
-    return {
-        'n_rows': len(enriched_df),
-        'n_symbols': enriched_df['symbol'].nunique(),
-        'symbols': sorted(enriched_df['symbol'].unique().tolist()),
-        'date_range': {
-            'start': enriched_df['timestamp'].min(),
-            'end': enriched_df['timestamp'].max()
-        },
-        'columns': enriched_df.columns.tolist()
-    }
+    enriched_list = []
+    
+    for symbol in signals_df['symbol'].unique():
+        # Filter data for this symbol
+        symbol_signals = signals_df[signals_df['symbol'] == symbol].copy()
+        symbol_prices = prices_df[prices_df['symbol'] == symbol].copy()
+        
+        # Merge prices
+        symbol_data = symbol_signals.merge(
+            symbol_prices[['date', 'close']], 
+            on='date', 
+            how='left'
+        )
+        
+        # Sort by date
+        symbol_data = symbol_data.sort_values('date')
+        
+        # Price momentum features
+        symbol_data['mom_5d'] = symbol_data['close'].pct_change(5)
+        symbol_data['mom_10d'] = symbol_data['close'].pct_change(10)
+        symbol_data['mom_20d'] = symbol_data['close'].pct_change(20)
+        
+        # Volatility features
+        returns = symbol_data['close'].pct_change()
+        symbol_data['vol_10d'] = returns.rolling(10).std() * np.sqrt(252)
+        symbol_data['vol_30d'] = returns.rolling(30).std() * np.sqrt(252)
+        symbol_data['vol_60d'] = returns.rolling(60).std() * np.sqrt(252)
+        
+        # Price level features
+        symbol_data['price_ma_20'] = symbol_data['close'].rolling(20).mean()
+        symbol_data['price_ma_50'] = symbol_data['close'].rolling(50).mean()
+        symbol_data['price_vs_ma20'] = symbol_data['close'] / symbol_data['price_ma_20']
+        
+        # Signal history (lagged)
+        symbol_data['signal_lag1'] = symbol_data['signal'].shift(1)
+        symbol_data['signal_lag2'] = symbol_data['signal'].shift(2)
+        symbol_data['trades_last_5d'] = symbol_data['signal'].rolling(5).sum()
+        
+        enriched_list.append(symbol_data)
+    
+    enriched_df = pd.concat(enriched_list, ignore_index=True)
+    
+    # Add time features
+    enriched_df['day_of_week'] = pd.to_datetime(enriched_df['date']).dt.dayofweek
+    enriched_df['month'] = pd.to_datetime(enriched_df['date']).dt.month
+    enriched_df['is_monday'] = (enriched_df['day_of_week'] == 0).astype(int)
+    enriched_df['is_friday'] = (enriched_df['day_of_week'] == 4).astype(int)
+    
+    return enriched_df
+
+
+def prepare_adversary_data(trades_df: pd.DataFrame, prices_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Main pipeline: Convert trades to adversary-ready format.
+    
+    Steps:
+    1. Convert trades to daily signals
+    2. Add price features
+    3. Create labels (next-day prediction)
+    
+    Args:
+        trades_df: Trade records
+        prices_df: Price history
+    
+    Returns:
+        DataFrame ready for adversary training
+    """
+    # Step 1: Trades to signals
+    signals_df = trades_to_daily_signals(trades_df, prices_df)
+    
+    # Step 2: Add features
+    enriched_df = enrich_with_price_features(signals_df, prices_df)
+    
+    # Step 3: Create labels (predict NEXT day's signal)
+    enriched_df = enriched_df.sort_values(['symbol', 'date'])
+    enriched_df['label'] = enriched_df.groupby('symbol')['signal'].shift(-1)
+    
+    # Drop last row per symbol (no future label)
+    enriched_df = enriched_df.dropna(subset=['label'])
+    enriched_df['label'] = enriched_df['label'].astype(int)
+    
+    return enriched_df
