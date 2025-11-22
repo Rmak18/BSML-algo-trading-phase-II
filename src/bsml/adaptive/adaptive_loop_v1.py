@@ -24,11 +24,11 @@ from bsml.adaptive.adversary_classifier import P7AdaptiveAdversary, time_split_d
 class AdaptiveConfig:
     """Configuration for adaptive training loop"""
     
-    AUC_HIGH_THRESHOLD = 0.75
-    AUC_LOW_THRESHOLD = 0.55
-    AUC_TARGET_MIN = 0.60
-    AUC_TARGET_MAX = 0.70
-    AUC_TARGET_MID = 0.65
+    AUC_HIGH_THRESHOLD = 0.60
+    AUC_LOW_THRESHOLD = 0.50
+    AUC_TARGET_MIN = 0.50
+    AUC_TARGET_MAX = 0.60
+    AUC_TARGET_MID = 0.55
     
     FACTOR_INCREASE = 1.20
     FACTOR_DECREASE = 0.80
