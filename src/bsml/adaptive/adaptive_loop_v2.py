@@ -1,10 +1,7 @@
 """
-P7 Adaptive Adversary Framework - POLICY-AGNOSTIC VERSION (V2)
+P7 Adaptive Adversary Framework - POLICY-AGNOSTIC VERSION (V2) - FIXED
 
-Supports multiple randomization policies:
-- Uniform: independent noise
-- Pink: correlated low-frequency noise  
-- OU: mean-reverting noise
+Supports multiple randomization policies with proper initialization
 
 Owner: P7
 Week: 4
@@ -13,7 +10,7 @@ Week: 4
 import numpy as np
 import pandas as pd
 from pathlib import Path
-from typing import Dict, Optional, Callable
+from typing import Dict, Optional
 from datetime import datetime
 import json
 
@@ -28,7 +25,7 @@ from bsml.adaptive.adversary_classifier import P7AdaptiveAdversary, time_split_d
 class AdaptiveConfig:
     """Configuration for adaptive training loop"""
     
-    # AUC thresholds (same for all policies)
+    # AUC thresholds
     AUC_HIGH_THRESHOLD = 0.60
     AUC_LOW_THRESHOLD = 0.50
     AUC_TARGET_MIN = 0.50
@@ -123,12 +120,32 @@ def adjust_ou_params(params: Dict, multiplier: float, config: AdaptiveConfig) ->
 
 
 # ============================================================================
+# POLICY INITIALIZATION FUNCTIONS
+# ============================================================================
+
+def init_uniform_policy(params: Dict, seed: int):
+    """Initialize UniformPolicy (expects params dict + seed)"""
+    return UniformPolicy(params=params, seed=seed)
+
+
+def init_pink_policy(params: Dict, seed: int):
+    """Initialize PinkPolicy (expects individual kwargs)"""
+    return PinkPolicy(**params, seed=seed)
+
+
+def init_ou_policy(params: Dict, seed: int):
+    """Initialize OUPolicy (expects individual kwargs)"""
+    return OUPolicy(**params, seed=seed)
+
+
+# ============================================================================
 # POLICY REGISTRY
 # ============================================================================
 
 POLICY_REGISTRY = {
     'uniform': {
         'class': UniformPolicy,
+        'init_func': init_uniform_policy,
         'default_params': DEFAULT_UNIFORM_PARAMS,
         'adjust_func': adjust_uniform_params,
         'display_name': 'Uniform Noise',
@@ -136,6 +153,7 @@ POLICY_REGISTRY = {
     },
     'pink': {
         'class': PinkPolicy,
+        'init_func': init_pink_policy,
         'default_params': DEFAULT_PINK_PARAMS,
         'adjust_func': adjust_pink_params,
         'display_name': 'Pink Noise (1/f)',
@@ -143,6 +161,7 @@ POLICY_REGISTRY = {
     },
     'ou': {
         'class': OUPolicy,
+        'init_func': init_ou_policy,
         'default_params': DEFAULT_OU_PARAMS,
         'adjust_func': adjust_ou_params,
         'display_name': 'Ornstein-Uhlenbeck',
@@ -310,14 +329,14 @@ def adaptive_training_loop(
         raise ValueError(f"Unknown policy: {policy_name}. Choose from {list(POLICY_REGISTRY.keys())}")
     
     policy_info = POLICY_REGISTRY[policy_name]
-    PolicyClass = policy_info['class']
+    init_func = policy_info['init_func']
     adjust_func = policy_info['adjust_func']
     
     if initial_params is None:
         initial_params = policy_info['default_params'].copy()
     
     params = initial_params.copy()
-    policy = PolicyClass(**params, seed=seed)
+    policy = init_func(params, seed)
     logger = IterationLogger(policy_name)
     
     hold_count = 0
@@ -355,10 +374,34 @@ def adaptive_training_loop(
             if verbose:
                 print("[2/5] Preparing adversary data...")
             adversary_data = prepare_adversary_data(trades, prices_df)
+            
+            # CRITICAL FIX: Check label distribution
+            n_trade_days = adversary_data['signal'].sum()
+            n_no_trade_days = len(adversary_data) - n_trade_days
+            
             if verbose:
                 print(f"  → {len(adversary_data)} observations")
-                n_trade_days = adversary_data['signal'].sum()
-                print(f"  → {n_trade_days} trade days ({n_trade_days/len(adversary_data)*100:.1f}%)")
+                print(f"  → Trade days: {n_trade_days} ({n_trade_days/len(adversary_data)*100:.1f}%)")
+                print(f"  → No-trade days: {n_no_trade_days} ({n_no_trade_days/len(adversary_data)*100:.1f}%)")
+            
+            # CRITICAL: If all days have trades, the adversary task is trivial
+            if n_no_trade_days == 0:
+                print(f"\n⚠️  WARNING: Policy generates trades EVERY day!")
+                print(f"  → Adversary prediction task is trivial (no negative class)")
+                print(f"  → This policy provides NO unpredictability")
+                print(f"  → Skipping adversary training")
+                
+                # Log the issue
+                logger.log_iteration(
+                    iter_num, params, 1.0, 'SKIP', 1.0, 
+                    'All days have trades - trivial prediction',
+                    {'success': False, 'n_samples': 0, 'n_features': 0, 
+                     'label_distribution': {'positive': n_trade_days, 'negative': 0}},
+                    {'success': False, 'n_samples': 0, 
+                     'label_distribution': {'positive': 0, 'negative': 0}},
+                    None
+                )
+                break
             
             if verbose:
                 print("[3/5] Splitting data...")
@@ -422,7 +465,7 @@ def adaptive_training_loop(
             else:
                 hold_count = 0
                 params = adjust_func(params, multiplier, config)
-                policy = PolicyClass(**params, seed=seed)
+                policy = init_func(params, seed)
                 
                 if verbose:
                     print(f"\nAdjustment: {params}")
