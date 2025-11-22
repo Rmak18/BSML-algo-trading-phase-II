@@ -58,7 +58,7 @@ class AdaptiveConfig:
     TEST_RATIO = 0.2
     
     # Prediction task
-    PREDICTION_WINDOW_HOURS = 4.0
+    PREDICTION_WINDOW_HOURS = 24.0
     
     # Policy bounds
     UNIFORM_PRICE_NOISE_MIN = 0.001
