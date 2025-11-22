@@ -106,8 +106,8 @@ def engineer_trade_features(trades: pd.DataFrame, prices: pd.DataFrame, verbose:
         merged['days_since_last_trade'] = merged['days_since_last_trade'].fillna(0)
         
         # Trade velocity
-        merged['trades_last_5d'] = merged.rolling(5, min_periods=1).size().reset_index(drop=True)
-        merged['trades_last_20d'] = merged.rolling(20, min_periods=1).size().reset_index(drop=True)
+        merged['trades_last_5d'] = merged['date'].rolling(5, min_periods=1).count()
+        merged['trades_last_20d'] = merged['date'].rolling(20, min_periods=1).count()
         
         # Average inter-trade time
         merged['avg_days_between_trades_5'] = merged['days_since_last_trade'].rolling(5, min_periods=1).mean()
