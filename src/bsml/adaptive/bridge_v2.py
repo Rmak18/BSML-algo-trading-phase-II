@@ -93,9 +93,10 @@ def engineer_trade_features(trades: pd.DataFrame, prices: pd.DataFrame, verbose:
         merged['week_of_year'] = merged['date'].dt.isocalendar().week
         merged['month'] = merged['date'].dt.month
         
-        # Time-of-day features (if timestamp has time component)
-        merged['hour'] = merged['date'].dt.hour
-        merged['minute'] = merged['date'].dt.minute
+        # NOTE: hour and minute are excluded because they cause data leakage
+        # (baseline trades are all at same time, uniform trades are randomized)
+        # merged['hour'] = merged['date'].dt.hour
+        # merged['minute'] = merged['date'].dt.minute
         
         # =====================================================================
         # FEATURE GROUP 3: Trade Timing Patterns
