@@ -1,157 +1,178 @@
 """
-Bridge: P4 Policy Output -> P7 Adversary Input
+P7 Bridge Module - Converts trades to adversary classifier input format
 
-Converts trade data to daily signal format for P6-style adversarial task.
+Updated Week 4: Support for multiple prediction windows
+- Original: "Will trade occur tomorrow?" (24h window)
+- New: "Will trade occur in next 4 hours?" (4h window)
 
 Owner: P7
-Week: 3
 """
 
-import pandas as pd
 import numpy as np
+import pandas as pd
+from typing import Tuple, Optional
 
 
-def trades_to_daily_signals(trades_df: pd.DataFrame, prices_df: pd.DataFrame) -> pd.DataFrame:
+def prepare_adversary_data(
+    trades: pd.DataFrame,
+    prices: pd.DataFrame,
+    prediction_window_hours: float = 4.0,
+    auto_detect_window: bool = False,
+    verbose: bool = False
+) -> pd.DataFrame:
     """
-    Convert P4 trades to daily signal format (P6-style).
+    Convert trades to adversary prediction format.
     
-    For each date and symbol:
-    - signal = 1 if trade occurred
-    - signal = 0 if no trade occurred
+    Prediction task: "Will a trade occur in the next X hours?"
+    
+    Args:
+        trades: DataFrame with columns ['date', 'symbol', 'side', 'qty', 'price', 'ref_price']
+        prices: DataFrame with columns ['date', 'symbol', 'price'] + technical indicators
+        prediction_window_hours: Hours to look ahead for trade prediction (default: 4.0)
+        auto_detect_window: If True, automatically determine optimal window based on data
+        verbose: Print diagnostic info
+    
+    Returns:
+        DataFrame with features + 'label' column (1 if trade occurs within window, 0 otherwise)
     """
-    # Normalize trades to date only (remove time component)
-    trades_clean = trades_df.copy()
     
-    if 'timestamp' in trades_clean.columns:
-        trades_clean['date'] = pd.to_datetime(trades_clean['timestamp']).dt.date
-    elif 'date' in trades_clean.columns:
-        trades_clean['date'] = pd.to_datetime(trades_clean['date']).dt.date
-    else:
-        raise ValueError("No date/timestamp column in trades")
+    if len(trades) == 0:
+        return pd.DataFrame()
     
-    # Convert to datetime for consistency
-    trades_clean['date'] = pd.to_datetime(trades_clean['date'])
+    # Ensure datetime
+    trades = trades.copy()
+    prices = prices.copy()
+    trades['date'] = pd.to_datetime(trades['date'])
+    prices['date'] = pd.to_datetime(prices['date'])
     
-    # Mark days with trades (1 = trade occurred)
-    trades_clean['signal'] = 1
-    trade_signals = trades_clean.groupby(['date', 'symbol'])['signal'].max().reset_index()
+    # Auto-detect optimal window if requested
+    if auto_detect_window:
+        prediction_window_hours = _auto_detect_window(trades, verbose=verbose)
     
-    # Normalize price dates
-    prices_clean = prices_df.copy()
-    prices_clean['date'] = pd.to_datetime(prices_clean['date']).dt.date
-    prices_clean['date'] = pd.to_datetime(prices_clean['date'])
+    if verbose:
+        print(f"\n[Bridge] Prediction window: {prediction_window_hours:.1f} hours")
     
-    # Create full date x symbol grid from prices
-    price_dates = sorted(prices_clean['date'].unique())
-    symbols = sorted(trades_clean['symbol'].unique())
+    # Sort by date
+    trades = trades.sort_values('date').reset_index(drop=True)
+    prices = prices.sort_values(['symbol', 'date']).reset_index(drop=True)
     
-    full_grid = pd.MultiIndex.from_product(
-        [price_dates, symbols],
-        names=['date', 'symbol']
-    ).to_frame(index=False)
+    # Get unique symbols
+    symbols = trades['symbol'].unique()
     
-    # Merge with trade signals
-    signals_df = full_grid.merge(trade_signals, on=['date', 'symbol'], how='left')
-    signals_df['signal'] = signals_df['signal'].fillna(0).astype(int)
+    all_obs = []
     
-    return signals_df
+    for symbol in symbols:
+        symbol_trades = trades[trades['symbol'] == symbol].copy()
+        symbol_prices = prices[prices['symbol'] == symbol].copy()
+        
+        if len(symbol_prices) == 0:
+            continue
+        
+        # Merge prices with technical indicators
+        symbol_prices = symbol_prices.sort_values('date').reset_index(drop=True)
+        
+        # For each price observation, label if trade occurs within window
+        symbol_prices['label'] = 0
+        
+        for idx, row in symbol_prices.iterrows():
+            obs_time = row['date']
+            window_end = obs_time + pd.Timedelta(hours=prediction_window_hours)
+            
+            # Check if any trade occurs in [obs_time, window_end)
+            trades_in_window = symbol_trades[
+                (symbol_trades['date'] >= obs_time) & 
+                (symbol_trades['date'] < window_end)
+            ]
+            
+            if len(trades_in_window) > 0:
+                symbol_prices.at[idx, 'label'] = 1
+        
+        # Add signal column (synonym for label, for backward compatibility)
+        symbol_prices['signal'] = symbol_prices['label']
+        
+        all_obs.append(symbol_prices)
+    
+    if len(all_obs) == 0:
+        return pd.DataFrame()
+    
+    result = pd.concat(all_obs, ignore_index=True)
+    
+    if verbose:
+        n_positive = result['label'].sum()
+        n_total = len(result)
+        print(f"[Bridge] Total observations: {n_total}")
+        print(f"[Bridge] Positive (trade within {prediction_window_hours:.1f}h): {n_positive} ({n_positive/n_total*100:.1f}%)")
+        print(f"[Bridge] Negative (no trade): {n_total - n_positive} ({(n_total-n_positive)/n_total*100:.1f}%)")
+    
+    return result
 
 
-def enrich_with_price_features(signals_df: pd.DataFrame, prices_df: pd.DataFrame) -> pd.DataFrame:
+def _auto_detect_window(trades: pd.DataFrame, verbose: bool = False) -> float:
     """
-    Add price-based features for adversary (P6-style).
+    Automatically detect optimal prediction window based on trade gaps.
+    
+    Logic:
+    - Calculate time gaps between consecutive trades
+    - Use median gap as the prediction window
+    - Clamp to reasonable range [1h, 48h]
+    
+    Args:
+        trades: Trades DataFrame
+        verbose: Print diagnostic info
+    
+    Returns:
+        Optimal window in hours
     """
-    # Normalize price dates
-    prices_clean = prices_df.copy()
-    prices_clean['date'] = pd.to_datetime(prices_clean['date']).dt.date
-    prices_clean['date'] = pd.to_datetime(prices_clean['date'])
+    trades = trades.sort_values(['symbol', 'date']).reset_index(drop=True)
     
-    # Detect price column name
-    price_col = None
-    for col in ['close', 'price', 'adj_close', 'Close']:
-        if col in prices_clean.columns:
-            price_col = col
-            break
+    gaps = []
+    for symbol in trades['symbol'].unique():
+        symbol_trades = trades[trades['symbol'] == symbol].copy()
+        symbol_trades = symbol_trades.sort_values('date')
+        
+        if len(symbol_trades) < 2:
+            continue
+        
+        trade_times = symbol_trades['date'].values
+        time_diffs = np.diff(trade_times).astype('timedelta64[h]').astype(float)
+        gaps.extend(time_diffs)
     
-    if price_col is None:
-        raise ValueError(f"No price column found. Available: {list(prices_clean.columns)}")
+    if len(gaps) == 0:
+        if verbose:
+            print("[Bridge] Auto-detect: No gaps found, using default 4.0h")
+        return 4.0
     
-    enriched_list = []
+    # Use median gap as window
+    median_gap = np.median(gaps)
     
-    for symbol in signals_df['symbol'].unique():
-        # Filter data
-        symbol_signals = signals_df[signals_df['symbol'] == symbol].copy()
-        symbol_prices = prices_clean[prices_clean['symbol'] == symbol].copy()
-        
-        # Merge prices
-        symbol_data = symbol_signals.merge(
-            symbol_prices[['date', price_col]], 
-            on='date', 
-            how='left'
-        )
-        
-        # Rename to standard column
-        symbol_data.rename(columns={price_col: 'price'}, inplace=True)
-        
-        # Sort by date
-        symbol_data = symbol_data.sort_values('date')
-        
-        # Forward fill missing prices (weekends/holidays)
-        symbol_data['price'] = symbol_data['price'].fillna(method='ffill')
-        
-        # Price momentum features
-        symbol_data['mom_5d'] = symbol_data['price'].pct_change(5)
-        symbol_data['mom_10d'] = symbol_data['price'].pct_change(10)
-        symbol_data['mom_20d'] = symbol_data['price'].pct_change(20)
-        
-        # Volatility features
-        returns = symbol_data['price'].pct_change()
-        symbol_data['vol_10d'] = returns.rolling(10).std() * np.sqrt(252)
-        symbol_data['vol_30d'] = returns.rolling(30).std() * np.sqrt(252)
-        symbol_data['vol_60d'] = returns.rolling(60).std() * np.sqrt(252)
-        
-        # Price level features
-        symbol_data['price_ma_20'] = symbol_data['price'].rolling(20).mean()
-        symbol_data['price_ma_50'] = symbol_data['price'].rolling(50).mean()
-        symbol_data['price_vs_ma20'] = symbol_data['price'] / (symbol_data['price_ma_20'] + 1e-8)
-        
-        # Signal history (lagged)
-        symbol_data['signal_lag1'] = symbol_data['signal'].shift(1)
-        symbol_data['signal_lag2'] = symbol_data['signal'].shift(2)
-        symbol_data['trades_last_5d'] = symbol_data['signal'].rolling(5).sum()
-        
-        enriched_list.append(symbol_data)
+    # Clamp to reasonable range
+    optimal_window = np.clip(median_gap, 1.0, 48.0)
     
-    enriched_df = pd.concat(enriched_list, ignore_index=True)
+    if verbose:
+        print(f"[Bridge] Auto-detect: Median gap = {median_gap:.1f}h")
+        print(f"[Bridge] Auto-detect: Optimal window = {optimal_window:.1f}h (clamped to [1h, 48h])")
     
-    # Add time features
-    enriched_df['day_of_week'] = enriched_df['date'].dt.dayofweek
-    enriched_df['month'] = enriched_df['date'].dt.month
-    enriched_df['is_monday'] = (enriched_df['day_of_week'] == 0).astype(int)
-    enriched_df['is_friday'] = (enriched_df['day_of_week'] == 4).astype(int)
-    
-    return enriched_df
+    return optimal_window
 
 
-def prepare_adversary_data(trades_df: pd.DataFrame, prices_df: pd.DataFrame) -> pd.DataFrame:
+def prepare_adversary_data_daily(
+    trades: pd.DataFrame,
+    prices: pd.DataFrame,
+    verbose: bool = False
+) -> pd.DataFrame:
     """
-    Main pipeline: Convert trades to adversary-ready format.
+    Legacy function: Daily prediction task "Will trade occur tomorrow?"
+    
+    Equivalent to prepare_adversary_data with prediction_window_hours=24
     """
-    # Step 1: Trades to signals
-    signals_df = trades_to_daily_signals(trades_df, prices_df)
-    
-    # Step 2: Add features
-    enriched_df = enrich_with_price_features(signals_df, prices_df)
-    
-    # Step 3: Create labels (predict NEXT day's signal)
-    enriched_df = enriched_df.sort_values(['symbol', 'date'])
-    enriched_df['label'] = enriched_df.groupby('symbol')['signal'].shift(-1)
-    
-    # Drop rows with no label (last day per symbol)
-    enriched_df = enriched_df.dropna(subset=['label'])
-    enriched_df['label'] = enriched_df['label'].astype(int)
-    
-    # Drop rows with missing features (first N days)
-    enriched_df = enriched_df.dropna()
-    
-    return enriched_df
+    return prepare_adversary_data(
+        trades, 
+        prices, 
+        prediction_window_hours=24.0,
+        auto_detect_window=False,
+        verbose=verbose
+    )
+
+
+# Backward compatibility
+prepare_adversary_data_v1 = prepare_adversary_data_daily
