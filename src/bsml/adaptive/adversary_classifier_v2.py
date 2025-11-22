@@ -62,10 +62,11 @@ class P7AdversaryV2:
             'date_only', 'side_numeric', 'direction_change'
         }
         
-        feature_cols = [
-            c for c in df.columns
-            if c not in exclude and np.issubdtype(df[c].dtype, np.number)
-        ]
+        # Use pandas select_dtypes which handles nullable types correctly
+        numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
+        
+        # Filter out excluded columns
+        feature_cols = [c for c in numeric_cols if c not in exclude]
         
         return feature_cols
     
