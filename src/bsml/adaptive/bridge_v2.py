@@ -66,22 +66,11 @@ def engineer_trade_features(trades: pd.DataFrame, prices: pd.DataFrame, verbose:
             continue
         
         # =====================================================================
-        # FEATURE GROUP 1: Price Execution Characteristics
-        # (Uniform policy perturbs ref_price, baseline doesn't)
+        # FEATURE GROUP 1: REMOVED - Price execution features leak policy info
+        # We're testing timing/behavior patterns, not execution style
         # =====================================================================
         
-        merged['price_deviation'] = (merged['ref_price'] - merged['price_market']) / (merged['price_market'] + 1e-8)
-        merged['abs_price_deviation'] = merged['price_deviation'].abs()
-        
-        # Rolling statistics of price deviations
-        merged['price_dev_ma5'] = merged['price_deviation'].rolling(5, min_periods=1).mean()
-        merged['price_dev_std5'] = merged['price_deviation'].rolling(5, min_periods=1).std()
-        merged['price_dev_ma20'] = merged['price_deviation'].rolling(20, min_periods=1).mean()
-        merged['price_dev_std20'] = merged['price_deviation'].rolling(20, min_periods=1).std()
-        
-        # Max/min deviations in recent window
-        merged['price_dev_max5'] = merged['abs_price_deviation'].rolling(5, min_periods=1).max()
-        merged['price_dev_min5'] = merged['abs_price_deviation'].rolling(5, min_periods=1).min()
+        # Skip price deviation features entirely
         
         # =====================================================================
         # FEATURE GROUP 2: Temporal Features
@@ -200,6 +189,8 @@ def prepare_adversary_data_v2(
     """
     Generate adversary training data by creating trades from BOTH policies.
     
+    Focus: Distinguish based on TIMING and BEHAVIORAL patterns, not price execution.
+    
     Args:
         prices: Price data
         baseline_generate_fn: Function to generate baseline trades
@@ -229,7 +220,7 @@ def prepare_adversary_data_v2(
     
     if verbose:
         print(f"[Bridge V2] → {len(uniform_trades)} uniform trades")
-        print("[Bridge V2] Engineering features...")
+        print("[Bridge V2] Engineering features (timing/behavioral patterns only)...")
     
     # Combine
     all_trades = pd.concat([baseline_trades, uniform_trades], ignore_index=True)
