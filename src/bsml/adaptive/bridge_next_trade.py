@@ -11,7 +11,6 @@ Week: 3
 import numpy as np
 import pandas as pd
 from typing import Tuple
-from datetime import timedelta
 
 
 def create_next_trade_dataset(trades: pd.DataFrame, prices: pd.DataFrame, lookback: int = 5) -> pd.DataFrame:
@@ -64,15 +63,14 @@ def create_next_trade_dataset(trades: pd.DataFrame, prices: pd.DataFrame, lookba
             if len(past_trades) < lookback:
                 continue
             
-            # Check if there's a trade in the next N days (not just tomorrow)
-            prediction_window = 5  # days
-            has_trade_in_window = False
+            # Check if there's a trade tomorrow
+            has_trade_tomorrow = len(symbol_trades[symbol_trades['date'] == next_date]) > 0
             
-            for day_offset in range(1, prediction_window + 1):
-                future_date = current_date + timedelta(days=day_offset)
-                if len(symbol_trades[symbol_trades['date'] == future_date]) > 0:
-                    has_trade_in_window = True
-                    break
+            # Get current market context
+            current_price_row = symbol_prices[symbol_prices['date'] <= current_date].iloc[-1] if len(symbol_prices[symbol_prices['date'] <= current_date]) > 0 else None
+            
+            if current_price_row is None:
+                continue
             
             # =====================================================================
             # FEATURE ENGINEERING: Past Trade Patterns
@@ -81,14 +79,8 @@ def create_next_trade_dataset(trades: pd.DataFrame, prices: pd.DataFrame, lookba
             features = {
                 'symbol': symbol,
                 'date': current_date,
-                'label': int(has_trade_in_window)  # 1 if trade in next 5 days
+                'label': int(has_trade_tomorrow)
             }
-            
-            # Get current market context
-            current_price_row = symbol_prices[symbol_prices['date'] <= current_date].iloc[-1] if len(symbol_prices[symbol_prices['date'] <= current_date]) > 0 else None
-            
-            if current_price_row is None:
-                continue
             
             # 1. Time since last trade
             last_trade_date = past_trades.iloc[-1]['date']
@@ -145,96 +137,103 @@ def create_next_trade_dataset(trades: pd.DataFrame, prices: pd.DataFrame, lookba
             features['day_of_month'] = current_date.day
             
             # 8. Streak features
-            # How many consecutive days WITH trades?
-            consecutive_days = 0
-            for j in range(1, len(past_trades) + 1):
-                if j == 1:
-                    consecutive_days = 1
-                else:
-                    prev_date = past_trades.iloc[-j]['date']
-                    curr_date = past_trades.iloc[-j+1]['date']
-                    if (curr_date - prev_date).days == 1:
-                        consecutive_days += 1
-                    else:
-                        break
-            features['consecutive_trade_days'] = consecutive_days
+            # How many consecutive days WITH trades
+            features['consecutive_trade_days'] = 0
+            check_date = current_date - pd.Timedelta(days=1)
+            while len(symbol_trades[symbol_trades['date'] == check_date]) > 0:
+                features['consecutive_trade_days'] += 1
+                check_date -= pd.Timedelta(days=1)
             
             all_obs.append(features)
     
     if len(all_obs) == 0:
         return pd.DataFrame()
     
-    result = pd.DataFrame(all_obs)
-    return result
+    df = pd.DataFrame(all_obs)
+    
+    # Fill NaNs
+    numeric_cols = df.select_dtypes(include=[np.number]).columns
+    df[numeric_cols] = df[numeric_cols].fillna(0)
+    
+    return df
 
 
 def prepare_next_trade_data(
     prices: pd.DataFrame,
-    baseline_generate_fn,
+    baseline_generator,
     uniform_policy,
     lookback: int = 5,
-    verbose: bool = False
+    verbose: bool = True
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Prepare separate datasets for baseline and uniform policies.
+    Generate datasets for both baseline and uniform policies.
     
     Returns:
-        (baseline_data, uniform_data) - each with features and labels
+        (baseline_data, uniform_data): Both as prediction datasets
     """
     
+    # Generate baseline trades
     if verbose:
         print("[Bridge Next-Trade] Generating baseline trades...")
-    
-    # Generate baseline trades
-    baseline_trades = baseline_generate_fn(prices)
-    
+    baseline_trades = baseline_generator(prices)
     if verbose:
         print(f"[Bridge Next-Trade] → {len(baseline_trades)} baseline trades")
-        print(f"[Bridge Next-Trade] Creating baseline prediction dataset (lookback={lookback})...")
     
+    # Create baseline dataset
+    if verbose:
+        print(f"[Bridge Next-Trade] Creating baseline prediction dataset (lookback={lookback})...")
     baseline_data = create_next_trade_dataset(baseline_trades, prices, lookback=lookback)
     
     if verbose:
         n_positive_baseline = (baseline_data['label'] == 1).sum()
         n_negative_baseline = (baseline_data['label'] == 0).sum()
         print(f"[Bridge Next-Trade] Baseline: {len(baseline_data)} observations")
-        print(f"[Bridge Next-Trade]   → {n_positive_baseline} with trade in next 5 days ({n_positive_baseline/len(baseline_data)*100:.1f}%)")
-        print(f"[Bridge Next-Trade]   → {n_negative_baseline} no trade in next 5 days ({n_negative_baseline/len(baseline_data)*100:.1f}%)")
-    
-    if verbose:
-        print("[Bridge Next-Trade] Generating uniform trades...")
+        print(f"[Bridge Next-Trade]   → {n_positive_baseline} with trade tomorrow ({n_positive_baseline/len(baseline_data)*100:.1f}%)")
+        print(f"[Bridge Next-Trade]   → {n_negative_baseline} no trade tomorrow ({n_negative_baseline/len(baseline_data)*100:.1f}%)")
     
     # Generate uniform trades
+    if verbose:
+        print("[Bridge Next-Trade] Generating uniform trades...")
     uniform_trades = uniform_policy.generate_trades(prices)
-    
     if verbose:
         print(f"[Bridge Next-Trade] → {len(uniform_trades)} uniform trades")
-        print(f"[Bridge Next-Trade] Creating uniform prediction dataset (lookback={lookback})...")
     
+    # Create uniform dataset
+    if verbose:
+        print(f"[Bridge Next-Trade] Creating uniform prediction dataset (lookback={lookback})...")
     uniform_data = create_next_trade_dataset(uniform_trades, prices, lookback=lookback)
     
     if verbose:
         n_positive_uniform = (uniform_data['label'] == 1).sum()
         n_negative_uniform = (uniform_data['label'] == 0).sum()
         print(f"[Bridge Next-Trade] Uniform: {len(uniform_data)} observations")
-        print(f"[Bridge Next-Trade]   → {n_positive_uniform} with trade in next 5 days ({n_positive_uniform/len(uniform_data)*100:.1f}%)")
-        print(f"[Bridge Next-Trade]   → {n_negative_uniform} no trade in next 5 days ({n_negative_uniform/len(uniform_data)*100:.1f}%)")
+        print(f"[Bridge Next-Trade]   → {n_positive_uniform} with trade tomorrow ({n_positive_uniform/len(uniform_data)*100:.1f}%)")
+        print(f"[Bridge Next-Trade]   → {n_negative_uniform} no trade tomorrow ({n_negative_uniform/len(uniform_data)*100:.1f}%)")
     
     return baseline_data, uniform_data
 
 
-def time_split_data(data_df: pd.DataFrame, train_ratio: float = 0.6, val_ratio: float = 0.2) -> Tuple:
+def time_split_data(data: pd.DataFrame, train_ratio: float = 0.6, val_ratio: float = 0.2) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Chronological split preserving time-series order.
+    Split data chronologically into train/val/test.
+    
+    Args:
+        data: Dataset with 'date' column
+        train_ratio: Proportion for training
+        val_ratio: Proportion for validation
+        
+    Returns:
+        (train, val, test) DataFrames
     """
-    df = data_df.sort_values('date').reset_index(drop=True)
     
-    n = len(df)
-    train_end = int(n * train_ratio)
-    val_end = int(n * (train_ratio + val_ratio))
+    data = data.sort_values('date').reset_index(drop=True)
     
-    train = df.iloc[:train_end].copy()
-    val = df.iloc[train_end:val_end].copy()
-    test = df.iloc[val_end:].copy()
+    n = len(data)
+    train_size = int(n * train_ratio)
+    val_size = int(n * val_ratio)
+    
+    train = data.iloc[:train_size]
+    val = data.iloc[train_size:train_size + val_size]
+    test = data.iloc[train_size + val_size:]
     
     return train, val, test
