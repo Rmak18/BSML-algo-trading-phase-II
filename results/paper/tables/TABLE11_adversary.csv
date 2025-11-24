@@ -1,0 +1,5 @@
+Strategy,Iteration_1_AUC,Iteration_2_AUC,Iteration_3_AUC,Final_AUC,AUC_Reduction_Pct,Improvement_1_to_3,Ranking,Convergence_Status
+Baseline,0.970,0.970,0.970,0.970,0.00%,0.000,4,Reference
+Uniform,0.600,0.570,0.540,0.540,44.33%,0.060,1,Converged
+Pink Noise,0.750,0.720,0.680,0.680,29.90%,0.070,3,Improved
+Ornstein-Uhlenbeck,0.680,0.650,0.620,0.620,36.08%,0.060,2,Improved
