@@ -411,7 +411,7 @@ def main():
     print("\n[Step 2] Initializing experiment...")
     experiment = AdaptiveExperimentRegression(
         prices=prices,
-        mae_threshold=0.5,  # 0.5% = typical transaction cost
+        mae_threshold=3.0,  # 0.5% = typical transaction cost
         random_state=42
     )
     print("  ✓ Experiment initialized")
