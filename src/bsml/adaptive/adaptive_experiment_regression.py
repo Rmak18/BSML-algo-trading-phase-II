@@ -418,7 +418,7 @@ def main():
     
     # Run single iteration
     print("\n[Step 3] Running experiment...")
-    results = experiment.run_single_iteration(iteration=0)
+    results = experiment.run_single_iteration(iteration=5)
     
     # Print final summary
     print("\n" + "="*80)
