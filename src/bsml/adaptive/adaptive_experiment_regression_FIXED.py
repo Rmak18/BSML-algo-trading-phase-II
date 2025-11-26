@@ -276,7 +276,7 @@ class AdaptiveExperimentRegression:
         
         if pink_mae_pct < self.mae_threshold:
             print(f"  ⚠️  MAE% < {self.mae_threshold}% → TOO EXPLOITABLE → ADAPTING")
-            self.pink_params['price_scale'] *= 1.5
+            self.pink_params['price_scale'] *= 1.2
             print(f"  New price_scale: {self.pink_params['price_scale']:.4f}")
             adaptations['pink'] = True
         else:
@@ -293,9 +293,9 @@ class AdaptiveExperimentRegression:
         
         if ou_mae_pct < self.mae_threshold:
             print(f"  ⚠️  MAE% < {self.mae_threshold}% → TOO EXPLOITABLE → ADAPTING")
-            self.ou_params['sigma'] *= 1.3
+            self.ou_params['sigma'] *= 1.2
             self.ou_params['theta'] *= 1.2
-            self.ou_params['price_scale'] *= 1.5
+            self.ou_params['price_scale'] *= 1.2
             print(f"  New sigma: {self.ou_params['sigma']:.4f}")
             print(f"  New theta: {self.ou_params['theta']:.4f}")
             print(f"  New price_scale: {self.ou_params['price_scale']:.4f}")
@@ -314,8 +314,8 @@ class AdaptiveExperimentRegression:
         
         if uniform_mae_pct < self.mae_threshold:
             print(f"  ⚠️  MAE% < {self.mae_threshold}% → TOO EXPLOITABLE → ADAPTING")
-            self.uniform_params['price_noise'] *= 1.3
-            self.uniform_params['time_noise_minutes'] *= 1.3
+            self.uniform_params['price_noise'] *= 1.2
+            self.uniform_params['time_noise_minutes'] *= 1.2
             print(f"  New price_noise: {self.uniform_params['price_noise']:.4f}")
             print(f"  New time_noise: {self.uniform_params['time_noise_minutes']:.1f}min")
             adaptations['uniform'] = True
@@ -364,7 +364,7 @@ class AdaptiveExperimentRegression:
         
         return results
     
-    def run_adaptive_loop(self, n_iterations: int = 5) -> pd.DataFrame:
+    def run_adaptive_loop(self, n_iterations: int = 10) -> pd.DataFrame:
         """
         Run multiple iterations with adaptation.
         
@@ -415,7 +415,7 @@ def main():
     print("\n[Step 2] Initializing experiment...")
     experiment = AdaptiveExperimentRegression(
         prices=prices,
-        mae_threshold=3.0,  # 3.0% = STRICT threshold for testing adaptation
+        mae_threshold=10.0,  # 3.0% = STRICT threshold for testing adaptation
         random_state=42
     )
     print("  ✓ Experiment initialized")
@@ -423,7 +423,7 @@ def main():
     
     # Run adaptive loop
     print("\n[Step 3] Running adaptive loop...")
-    results_df = experiment.run_adaptive_loop(n_iterations=5)
+    results_df = experiment.run_adaptive_loop(n_iterations=10)
     
     # Print evolution table
     print("\n" + "="*80)
@@ -438,17 +438,17 @@ def main():
     print(f"\nPink Noise:")
     print(f"  Initial MAE%: {results_df['pink_mae_pct'].iloc[0]:.4f}%")
     print(f"  Final MAE%:   {results_df['pink_mae_pct'].iloc[-1]:.4f}%")
-    print(f"  Status: {'✅ SAFE' if results_df['pink_mae_pct'].iloc[-1] >= 3.0 else '⚠️ NEEDS MORE ADAPTATION'}")
+    print(f"  Status: {'✅ SAFE' if results_df['pink_mae_pct'].iloc[-1] >= 10.0 else '⚠️ NEEDS MORE ADAPTATION'}")
     
     print(f"\nOU Process:")
     print(f"  Initial MAE%: {results_df['ou_mae_pct'].iloc[0]:.4f}%")
     print(f"  Final MAE%:   {results_df['ou_mae_pct'].iloc[-1]:.4f}%")
-    print(f"  Status: {'✅ SAFE' if results_df['ou_mae_pct'].iloc[-1] >= 3.0 else '⚠️ NEEDS MORE ADAPTATION'}")
+    print(f"  Status: {'✅ SAFE' if results_df['ou_mae_pct'].iloc[-1] >= 10.0 else '⚠️ NEEDS MORE ADAPTATION'}")
     
     print(f"\nUniform:")
     print(f"  Initial MAE%: {results_df['uniform_mae_pct'].iloc[0]:.4f}%")
     print(f"  Final MAE%:   {results_df['uniform_mae_pct'].iloc[-1]:.4f}%")
-    print(f"  Status: {'✅ SAFE' if results_df['uniform_mae_pct'].iloc[-1] >= 3.0 else '⚠️ NEEDS MORE ADAPTATION'}")
+    print(f"  Status: {'✅ SAFE' if results_df['uniform_mae_pct'].iloc[-1] >= 10.0 else '⚠️ NEEDS MORE ADAPTATION'}")
     
     # Save results
     results_df.to_csv('adaptive_regression_results.csv', index=False)
