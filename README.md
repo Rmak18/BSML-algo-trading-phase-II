@@ -27,7 +27,7 @@ This establishes that adversarial robustness requires **dynamic, game-theoretic 
 ---
 | Name                     | Role                                       | Profiles                    |
 | ------------------------ | ------------------------------------------ | --------------------------- |
-| **Vincenzo Della Ratta** | Infrastructure, Pipeline, Backtesting (P3) | [GitHub](#) · [LinkedIn](#) |
+| **Vincenzo Della Ratta** | Infrastructure, Pipeline, Backtesting      | [GitHub](https://github.com/Vindr05) · [LinkedIn](https://www.linkedin.com/in/vincenzodellaratta/) |
 | **Preslav Georgiev**     |                                            | [GitHub](#) · [LinkedIn](#) |
 | **Matteo Roda**          |                                            | [GitHub](#) · [LinkedIn](#) |
 | **Rayi Makori**          |                                            | [GitHub](#) · [LinkedIn](#) |
