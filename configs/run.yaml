@@ -1,7 +1,7 @@
-seed: 303
+seed: 42
 policy: pink
 exposure_diff_pct: null
-output_dir: outputs/runs/latest
+output_dir: outputs/runs/runs
 data:
-  prices_csv: data/toy_prices_baseline.csv
+  prices_csv: data/ALL_backtest.csv
 costs: configs/costs.yaml

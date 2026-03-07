@@ -1,68 +1,14 @@
 #!/usr/bin/env python3
 """
-Download 1Y daily OHLCV for 10 large ETFs using yfinance.
-- Saves one CSV per ETF under data/etf_1y/
-- Also writes a combined CSV: data/etf_1y/etfs_1y_combined.csv
-Edit TICKERS if you want a different set.
+NOTE: This project uses SYNTHETIC data only.
+      Do NOT download real market data from yfinance or any other source.
+
+To regenerate data/ALL_backtest.csv, run the synthetic data generator:
+    PYTHONPATH=src python3 data/scripts/generate_synthetic_data.py
+
+The generator uses a Cholesky-decomposed covariance structure (paper Section 4.1)
+to produce 1,538 trading days of correlated synthetic ETF prices.
+
+Paper universe (Section 4):
+    SPY, QQQ, IVV, VOO, VTI, EEM, GLD, TLT, XLF, EFA
 """
-
-import os
-from datetime import date
-import pandas as pd
-import yfinance as yf
-
-# Approximate top 10 mega ETFs (by AUM/liquidity). Adjust as you like.
-TICKERS = [
-    "SPY",   # SPDR S&P 500
-    "IVV",   # iShares Core S&P 500
-    "VOO",   # Vanguard S&P 500
-    "QQQ",   # Invesco QQQ
-    "VTI",   # Vanguard Total Stock Market
-    "EEM",   # iShares MSCI Emerging Markets  (replaces VEA per paper Section 4)
-    "GLD",   # SPDR Gold Shares               (replaces VWO per paper Section 4)
-    "TLT",   # iShares 20+ Year Treasury Bond (replaces AGG per paper Section 4)
-    "XLF",   # Financial Select Sector SPDR   (replaces IEMG per paper Section 4)
-    "EFA",   # iShares MSCI EAFE              (replaces IJR per paper Section 4)
-]
-
-OUT_DIR = os.path.join("data", "etf_1y")
-os.makedirs(OUT_DIR, exist_ok=True)
-
-def fetch_one(ticker: str) -> pd.DataFrame:
-    df = yf.download(ticker, period="1y", interval="1d", auto_adjust=True, progress=False)
-    if df.empty:
-        return df
-    df = df.rename(columns=str.lower).reset_index()
-    df.insert(0, "ticker", ticker)
-    # add simple daily return
-    if "close" in df.columns:
-        df["ret_1d"] = df["close"].pct_change()
-    return df
-
-def main():
-    frames = []
-    for t in TICKERS:
-        print(f"Downloading {t} …")
-        try:
-            df = fetch_one(t)
-        except Exception as e:
-            print(f"  ERROR fetching {t}: {e}")
-            continue
-        if df.empty:
-            print(f"  WARN: no data for {t}")
-            continue
-        out_path = os.path.join(OUT_DIR, f"{t}_1y.csv")
-        df.to_csv(out_path, index=False)
-        print(f"  wrote {out_path} ({len(df)} rows)")
-        frames.append(df)
-
-    if frames:
-        combo = pd.concat(frames, ignore_index=True)
-        combo_path = os.path.join(OUT_DIR, "etfs_1y_combined.csv")
-        combo.to_csv(combo_path, index=False)
-        print(f"Combined CSV written: {combo_path} ({len(combo)} rows))")
-    else:
-        print("No data downloaded. Check internet/yfinance and retry.")
-
-if __name__ == "__main__":
-    main()
